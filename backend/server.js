@@ -21,9 +21,33 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 // CORS
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:5178',
+  'http://localhost:5179',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
+  'http://127.0.0.1:5176',
+  'http://127.0.0.1:5177',
+  'http://127.0.0.1:5178',
+  'http://127.0.0.1:5179',
+];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Origin not allowed by CORS'));
+  },
+  credentials: true,
 }));
 
 // Rate limiting
@@ -97,11 +121,11 @@ const startServer = async () => {
     const dbConnected = await testConnection();
     
     if (!dbConnected) {
-      console.error('⚠️  No se pudo conectar a la base de datos. Verifica tu configuración.');
+      console.error('⚠️  No se pudo conectar a PostgreSQL. Verifica tu configuración.');
       console.log('💡 Asegúrate de:');
-      console.log('   1. Tener MySQL instalado y corriendo');
-      console.log('   2. Crear un archivo .env basado en .env.example');
-      console.log('   3. Ejecutar el schema.sql para crear las tablas');
+      console.log('   1. Tener PostgreSQL instalado y corriendo');
+      console.log('   2. Configurar correctamente las variables DB_HOST, DB_PORT, DB_USER, DB_PASSWORD y DB_NAME en .env');
+      console.log('   3. Ejecutar el schema SQL para crear las tablas y usuarios necesarios');
       process.exit(1);
     }
 

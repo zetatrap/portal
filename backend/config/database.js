@@ -1,43 +1,39 @@
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Configuración de conexión
+const { Pool } = pg;
+
 const config = {
   host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'laordencrew_db',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+  port: Number(process.env.DB_PORT || 5432),
+  user: process.env.DB_USER || 'appuser',
+  password: process.env.DB_PASSWORD || 'postgres123',
+  database: process.env.DB_NAME || 'beats_store',
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 };
 
-// Crear pool de conexiones
-export const pool = mysql.createPool(config);
+export const pool = new Pool(config);
 
-// Función para verificar conexión
 export const testConnection = async () => {
   try {
-    const connection = await pool.getConnection();
-    console.log('✅ Conexión exitosa a MySQL');
-    connection.release();
+    const client = await pool.connect();
+    console.log('✅ Conexión exitosa a PostgreSQL');
+    client.release();
     return true;
   } catch (error) {
-    console.error('❌ Error al conectar con MySQL:', error.message);
+    console.error('❌ Error al conectar con PostgreSQL:', error.message);
     return false;
   }
 };
 
-// Query helper
-export const query = async (sql, params) => {
+export const query = async (text, params = []) => {
   try {
-    const [results] = await pool.execute(sql, params);
-    return results;
+    const result = await pool.query(text, params);
+    return result.rows;
   } catch (error) {
     console.error('Error en query:', error);
     throw error;

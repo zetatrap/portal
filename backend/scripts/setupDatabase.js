@@ -1,4 +1,4 @@
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,50 +6,50 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function setupDatabase() {
-  let connection;
-  
-  try {
-    console.log('🚀 Iniciando configuración de base de datos...\n');
+  let pool;
 
-    // Conectar a MySQL (sin seleccionar base de datos)
-    connection = await mysql.createConnection({
+  try {
+    console.log('🚀 Iniciando configuración de PostgreSQL...\n');
+
+    pool = new Pool({
       host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '3306'),
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      multipleStatements: true
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      user: process.env.DB_USER || 'appuser',
+      password: process.env.DB_PASSWORD || 'postgres123',
+      database: process.env.DB_NAME || 'beats_store',
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000
     });
 
-    console.log('✅ Conectado a MySQL');
+    const client = await pool.connect();
+    console.log('✅ Conectado a PostgreSQL');
+    client.release();
 
-    // Leer archivo SQL
     const schemaPath = path.join(__dirname, '../../database/schema.sql');
     const schema = fs.readFileSync(schemaPath, 'utf8');
 
-    console.log('📄 Ejecutando schema SQL...');
+    console.log('📄 Ejecutando schema SQL PostgreSQL...');
+    await pool.query(schema);
 
-    // Ejecutar schema
-    await connection.query(schema);
-
-    console.log('✅ Base de datos creada exitosamente');
     console.log('✅ Tablas creadas');
     console.log('✅ Datos de ejemplo insertados');
     console.log('\n🎉 ¡Base de datos lista!\n');
-    console.log('📊 Puedes conectarte a: ' + process.env.DB_NAME);
+    console.log('📊 Base conectada: ' + (process.env.DB_NAME || 'beats_store'));
     console.log('👤 Usuario de prueba:');
     console.log('   Email: test@laordencrew.com');
     console.log('   Password: Test123!\n');
-
   } catch (error) {
     console.error('❌ Error al configurar la base de datos:', error.message);
     process.exit(1);
   } finally {
-    if (connection) {
-      await connection.end();
+    if (pool) {
+      await pool.end();
     }
   }
 }
