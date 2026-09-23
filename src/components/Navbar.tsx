@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Menu, X, Radio } from 'lucide-react'
+import { Menu, X, Radio, ShoppingCart } from 'lucide-react'
+import { useCart } from '../context/CartContext'
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
+  const { itemCount } = useCart()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -19,7 +21,6 @@ const Navbar = () => {
   const navItems = [
     { name: 'INICIO', path: '/' },
     { name: 'TIENDA', path: '/tienda' },
-    { name: 'REGISTRAR', path: '/registro' },
   ]
 
   return (
@@ -78,15 +79,34 @@ const Navbar = () => {
                 </Link>
               </motion.div>
             ))}
+
+            <Link to="/carrito" className="relative p-2 rounded-full border border-crimson/30 hover:border-crimson/60 transition-all">
+              <ShoppingCart className="w-5 h-5 text-white" />
+              {itemCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-crimson text-white rounded-full w-5 h-5 text-[10px] flex items-center justify-center font-bold">
+                  {itemCount}
+                </span>
+              )}
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden relative w-10 h-10 text-crimson focus:outline-none"
-          >
-            {isOpen ? <X /> : <Menu />}
-          </button>
+          <div className="md:hidden flex items-center gap-3">
+            <Link to="/carrito" className="relative p-2 rounded-full border border-crimson/30">
+              <ShoppingCart className="w-5 h-5 text-white" />
+              {itemCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-crimson text-white rounded-full w-5 h-5 text-[10px] flex items-center justify-center font-bold">
+                  {itemCount}
+                </span>
+              )}
+            </Link>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="relative w-10 h-10 text-crimson focus:outline-none"
+            >
+              {isOpen ? <X /> : <Menu />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -113,6 +133,13 @@ const Navbar = () => {
                 {item.name}
               </Link>
             ))}
+            <Link
+              to="/carrito"
+              onClick={() => setIsOpen(false)}
+              className="block px-4 py-3 text-lg font-bold tracking-wider rounded-lg bg-crimson/20 text-white"
+            >
+              CARRITO ({itemCount})
+            </Link>
           </div>
         </motion.div>
       )}

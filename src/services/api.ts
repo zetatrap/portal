@@ -130,7 +130,15 @@ export const contactService = {
 
 // ========== ORDERS ==========
 export const ordersService = {
-  create: async (orderData: { userId: number; items: any[]; paymentMethod?: string }) => {
+  create: async (orderData: {
+    userId?: number | null;
+    buyerName?: string;
+    buyerEmail?: string;
+    buyerPhone?: string;
+    buyerMessage?: string;
+    items: Array<{ productId: number; quantity?: number; price?: number }>;
+    paymentMethod?: string;
+  }) => {
     return await request('/orders', {
       method: 'POST',
       body: JSON.stringify(orderData),

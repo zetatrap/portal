@@ -5,68 +5,81 @@ const router = express.Router();
 
 router.post('/', async (req, res) => {
   try {
-    const { userId, items, paymentMethod } = req.body;
+    const {
+      userId = null,
+      buyerName,
+      buyerEmail,
+      buyerPhone,
+      buyerMessage,
+      items,
+      paymentMethod
+    } = req.body;
 
-    if (!userId || !items || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Datos de orden inválidos'
       });
     }
 
-    let totalAmount = 0;
-    const orderItems = [];
+    const firstItem = items[0];
+    const productId = Number(firstItem?.productId);
+    const quantity = Number(firstItem?.quantity) || 1;
 
-    for (const item of items) {
-      const products = await query(
-        'SELECT id, price FROM products WHERE id = $1 AND is_active = TRUE',
-        [item.productId]
-      );
-
-      if (products.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: `Producto ${item.productId} no encontrado`
-        });
-      }
-
-      const product = products[0];
-      const quantity = Number(item.quantity) || 1;
-      const subtotal = Number(product.price) * quantity;
-      totalAmount += subtotal;
-
-      orderItems.push({
-        productId: product.id,
-        quantity,
-        price: Number(product.price),
-        subtotal
+    if (!productId || !buyerName || !buyerEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Faltan datos obligatorios del comprador o del producto'
       });
     }
 
+    const products = await query(
+      'SELECT id, name, price FROM products WHERE id = $1 AND is_active = TRUE',
+      [productId]
+    );
+
+    if (products.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Producto ${productId} no encontrado`
+      });
+    }
+
+    const product = products[0];
+    const finalPrice = Number(product.price) || 0;
+    const totalAmount = finalPrice * quantity;
+
     const orderResult = await query(
-      `INSERT INTO orders (user_id, total_amount, payment_method)
-       VALUES ($1, $2, $3)
+      `INSERT INTO orders (
+        user_id,
+        buyer_name,
+        buyer_email,
+        buyer_phone,
+        buyer_message,
+        total_amount,
+        payment_method,
+        payment_status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
-      [userId, totalAmount, paymentMethod || 'pending']
+      [userId ?? null, buyerName, buyerEmail, buyerPhone || null, buyerMessage || null, totalAmount, paymentMethod || 'pending', 'pending']
     );
 
     const orderId = orderResult[0]?.id;
 
-    for (const item of orderItems) {
-      await query(
-        `INSERT INTO order_items (order_id, product_id, quantity, price, subtotal)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [orderId, item.productId, item.quantity, item.price, item.subtotal]
-      );
-    }
+    await query(
+      `INSERT INTO order_items (order_id, product_id, quantity, price, subtotal)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [orderId, product.id, quantity, finalPrice, totalAmount]
+    );
 
     res.status(201).json({
       success: true,
-      message: 'Orden creada exitosamente',
+      message: 'Compra registrada correctamente',
       data: {
         orderId,
         totalAmount,
-        itemsCount: orderItems.length
+        productName: product.name,
+        buyerEmail,
       }
     });
   } catch (error) {

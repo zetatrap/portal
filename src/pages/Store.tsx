@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Music, Smartphone, Video, Globe, ShoppingCart, Star, Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { productsService } from '../services/api'
+import { useCart } from '../context/CartContext'
 
 type Category = 'all' | 'beats' | 'apps' | 'videos' | 'webs'
 
@@ -21,6 +23,7 @@ const Store = () => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { addToCart, itemCount } = useCart()
 
   // Cargar productos al montar y cuando cambie la categoría
   useEffect(() => {
@@ -57,6 +60,16 @@ const Store = () => {
   return (
     <div className="min-h-screen pt-32 pb-20 px-4 relative">
       <div className="max-w-7xl mx-auto">
+        <div className="flex justify-end mb-6">
+          <Link
+            to="/carrito"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-crimson to-neon-red text-white font-bold shadow-lg shadow-crimson/40"
+          >
+            <ShoppingCart className="w-5 h-5" />
+            Comprar ({itemCount})
+          </Link>
+        </div>
+
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -50 }}
@@ -163,7 +176,9 @@ const Store = () => {
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
+                        onClick={() => addToCart(product)}
                         className="p-3 bg-gradient-to-r from-crimson to-neon-red rounded-full shadow-lg shadow-crimson/50 hover:shadow-crimson/70 transition-all duration-300"
+                        title="Agregar al carrito"
                       >
                         <ShoppingCart className="w-5 h-5 text-white" />
                       </motion.button>
