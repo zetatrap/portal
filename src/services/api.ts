@@ -109,6 +109,54 @@ export const productsService = {
   },
 };
 
+export const adminProductsService = {
+  getAll: async () => {
+    return await request('/admin/products');
+  },
+
+  create: async (payload: {
+    name: string;
+    slug?: string;
+    description: string;
+    price: number | string;
+    categorySlug?: string;
+    imageUrl?: string;
+    audioUrl?: string;
+    rating?: number | string;
+    isFeatured?: boolean;
+    isActive?: boolean;
+  }) => {
+    return await request('/admin/products', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  update: async (id: number, payload: {
+    name: string;
+    slug?: string;
+    description: string;
+    price: number | string;
+    categorySlug?: string;
+    imageUrl?: string;
+    audioUrl?: string;
+    rating?: number | string;
+    isFeatured?: boolean;
+    isActive?: boolean;
+  }) => {
+    return await request(`/admin/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  remove: async (id: number) => {
+    return await request(`/admin/products/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 // ========== CONTACT ==========
 export const contactService = {
   send: async (contactData: { name: string; email: string; message: string }) => {
@@ -157,6 +205,7 @@ export const ordersService = {
 export default {
   auth: authService,
   products: productsService,
+  adminProducts: adminProductsService,
   contact: contactService,
   orders: ordersService,
 };

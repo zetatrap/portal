@@ -21,6 +21,7 @@ const Navbar = () => {
   const navItems = [
     { name: 'INICIO', path: '/' },
     { name: 'TIENDA', path: '/tienda' },
+    { name: 'ADMIN', path: '/admin' },
   ]
 
   return (
