@@ -18,6 +18,14 @@ const PurchaseFormPage = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [orderCreated, setOrderCreated] = useState<{ orderId: number; totalAmount: number } | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'transfer' | 'cash'>('card')
+
+  const paymentOptions = [
+    { id: 'card', label: 'Tarjeta', subtitle: 'Visa •••• 4242', accent: 'from-crimson to-neon-red' },
+    { id: 'transfer', label: 'Transferencia', subtitle: 'Banco / CBU', accent: 'from-blue-500 to-cyan-500' },
+    { id: 'cash', label: 'Efectivo', subtitle: 'Pago presencial', accent: 'from-amber-500 to-yellow-500' },
+  ] as const
 
   if (!selectedBeat) {
     return (
@@ -53,7 +61,7 @@ const PurchaseFormPage = () => {
     setLoading(true)
 
     try {
-      await ordersService.checkout({
+      const response = await ordersService.checkout({
         userId: null,
         buyerName: formData.buyerName,
         buyerEmail: formData.buyerEmail,
@@ -69,12 +77,10 @@ const PurchaseFormPage = () => {
         ],
       })
 
-      clearCart()
-      setSuccess(true)
-
-      setTimeout(() => {
-        navigate('/tienda')
-      }, 2200)
+      setOrderCreated({
+        orderId: response.data.orderId,
+        totalAmount: response.data.totalAmount,
+      })
     } catch (err: any) {
       setError(err.message || 'No se pudo guardar la compra.')
     } finally {
@@ -82,14 +88,117 @@ const PurchaseFormPage = () => {
     }
   }
 
+  const handleSimulatedPayment = async () => {
+    if (!orderCreated) {
+      setError('Primero crea la orden para continuar con el pago.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await ordersService.completeCheckout(orderCreated.orderId)
+      clearCart()
+      setSuccess(true)
+
+      setTimeout(() => {
+        navigate('/tienda')
+      }, 2200)
+    } catch (err: any) {
+      setError(err.message || 'No se pudo confirmar el pago simulado.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectedPayment = paymentOptions.find((option) => option.id === paymentMethod) ?? paymentOptions[0]
+
   if (success) {
     return (
       <div className="min-h-screen pt-32 pb-20 px-4 flex items-center justify-center">
         <div className="glass-effect rounded-3xl border border-crimson/20 p-10 text-center max-w-xl">
           <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-6" />
-          <h2 className="text-3xl font-bold text-white mb-4">Compra registrada</h2>
+          <h2 className="text-3xl font-bold text-white mb-4">Pago confirmado</h2>
           <p className="text-gray-300 mb-2">Gracias, {formData.buyerName}.</p>
-          <p className="text-gray-400">La información del beat y del comprador quedó guardada correctamente.</p>
+          <p className="text-gray-400">Tu compra quedó registrada correctamente y la sesión fue cerrada al finalizar el pago.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (orderCreated) {
+    return (
+      <div className="min-h-screen pt-32 pb-20 px-4 relative">
+        <div className="max-w-2xl mx-auto">
+          <div className="glass-effect rounded-3xl border border-crimson/20 p-8">
+            <p className="text-sm uppercase tracking-[0.25em] text-crimson mb-4">Pasarela de pago</p>
+            <h2 className="text-3xl font-bold text-white mb-4">Simulación de pago</h2>
+            <p className="text-gray-300 mb-6">
+              La compra quedó creada con éxito. Elegí el método de pago y simulá la aprobación del cobro.
+            </p>
+
+            <div className="space-y-3 mb-6">
+              {paymentOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setPaymentMethod(option.id)}
+                  className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                    paymentMethod === option.id
+                      ? 'border-crimson bg-crimson/10 shadow-lg shadow-crimson/20'
+                      : 'border-white/10 bg-black/10 hover:border-gray-500'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-white font-semibold">{option.label}</p>
+                      <p className="text-gray-400 text-sm">{option.subtitle}</p>
+                    </div>
+                    <div className={`h-10 w-10 rounded-full bg-gradient-to-r ${option.accent}`} />
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="rounded-2xl border border-crimson/20 bg-black/20 p-5 mb-6">
+              <div className="flex justify-between text-gray-300 mb-2">
+                <span>Orden</span>
+                <span>#{orderCreated.orderId}</span>
+              </div>
+              <div className="flex justify-between text-gray-300 mb-2">
+                <span>Método</span>
+                <span>{selectedPayment.label}</span>
+              </div>
+              <div className="flex justify-between text-white text-xl font-bold pt-3 border-t border-white/10">
+                <span>Total</span>
+                <span>€{orderCreated.totalAmount}</span>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-200">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSimulatedPayment}
+              disabled={loading}
+              className="w-full rounded-full bg-gradient-to-r from-crimson to-neon-red px-6 py-3 font-bold text-white disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Procesando pago...' : `Pagar con ${selectedPayment.label.toLowerCase()}`}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOrderCreated(null)}
+              className="mt-4 w-full rounded-full border border-gray-600 px-6 py-3 font-bold text-gray-200"
+            >
+              Volver al formulario
+            </button>
+          </div>
         </div>
       </div>
     )

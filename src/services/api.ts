@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5005/api';
 
 // Helper para hacer requests
 const request = async (endpoint: string, options: RequestInit = {}) => {
@@ -13,15 +13,25 @@ const request = async (endpoint: string, options: RequestInit = {}) => {
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, config);
-    const data = await response.json();
+
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = { message: 'La API respondió con un formato no válido.' };
+    }
 
     if (!response.ok) {
-      throw new Error(data.message || 'Error en la petición');
+      throw new Error(data?.message || `Error en la petición (${response.status})`);
     }
 
     return data;
-  } catch (error) {
-    console.error('API Error:', error);
+  } catch (error: any) {
+    console.error('API Error:', {
+      endpoint,
+      url: `${API_URL}${endpoint}`,
+      message: error?.message,
+    });
     throw error;
   }
 };
