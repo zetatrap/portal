@@ -53,7 +53,7 @@ const PurchaseFormPage = () => {
     setLoading(true)
 
     try {
-      await ordersService.create({
+      await ordersService.checkout({
         userId: null,
         buyerName: formData.buyerName,
         buyerEmail: formData.buyerEmail,

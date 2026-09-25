@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { testConnection } from './config/database.js';
@@ -62,6 +63,7 @@ app.use('/api/', limiter);
 // Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Logger
 if (process.env.NODE_ENV === 'development') {

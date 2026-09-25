@@ -4,20 +4,12 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const request = async (endpoint: string, options: RequestInit = {}) => {
   const config: RequestInit = {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
   };
-
-  // Agregar token si existe
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers = {
-      ...config.headers,
-      Authorization: `Bearer ${token}`,
-    };
-  }
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, config);
@@ -43,38 +35,27 @@ export const authService = {
     artistName: string;
     role: string;
   }) => {
-    const response = await request('/auth/register', {
+    return await request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
-    
-    // Guardar token
-    if (response.data?.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data));
-    }
-    
-    return response;
   },
 
   login: async (credentials: { email: string; password: string }) => {
-    const response = await request('/auth/login', {
+    return await request('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
-    
-    // Guardar token
-    if (response.data?.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data));
-    }
-    
-    return response;
   },
 
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  logout: async () => {
+    try {
+      await request('/auth/logout', {
+        method: 'POST',
+      });
+    } finally {
+      localStorage.removeItem('user');
+    }
   },
 
   verify: async () => {
@@ -187,9 +168,30 @@ export const ordersService = {
     items: Array<{ productId: number; quantity?: number; price?: number }>;
     paymentMethod?: string;
   }) => {
-    return await request('/orders', {
+    return await request('/orders/checkout', {
       method: 'POST',
       body: JSON.stringify(orderData),
+    });
+  },
+
+  checkout: async (orderData: {
+    userId?: number | null;
+    buyerName?: string;
+    buyerEmail?: string;
+    buyerPhone?: string;
+    buyerMessage?: string;
+    items: Array<{ productId: number; quantity?: number; price?: number }>;
+    paymentMethod?: string;
+  }) => {
+    return await request('/orders/checkout', {
+      method: 'POST',
+      body: JSON.stringify(orderData),
+    });
+  },
+
+  completeCheckout: async (orderId: number) => {
+    return await request(`/orders/checkout/complete/${orderId}`, {
+      method: 'POST',
     });
   },
 

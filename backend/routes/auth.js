@@ -6,6 +6,25 @@ import { query } from '../config/database.js';
 
 const router = express.Router();
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+const setAuthCookie = (res, token) => {
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+};
+
+const clearAuthCookie = (res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+  });
+};
+
 const registerValidation = [
   body('name').trim().notEmpty().withMessage('El nombre es requerido'),
   body('email').isEmail().normalizeEmail().withMessage('Email inválido'),
@@ -65,6 +84,8 @@ router.post('/register', registerValidation, async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    setAuthCookie(res, token);
+
     res.status(201).json({
       success: true,
       message: '¡Registro exitoso! Bienvenido a La Orden Crew 🚀',
@@ -74,7 +95,6 @@ router.post('/register', registerValidation, async (req, res) => {
         email,
         artistName,
         role,
-        token
       }
     });
 
@@ -132,6 +152,8 @@ router.post('/login', loginValidation, async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    setAuthCookie(res, token);
+
     res.json({
       success: true,
       message: '¡Bienvenido de vuelta! 🚀',
@@ -141,7 +163,6 @@ router.post('/login', loginValidation, async (req, res) => {
         email: user.email,
         artistName: user.artist_name,
         role: user.role,
-        token
       }
     });
 
@@ -157,7 +178,7 @@ router.post('/login', loginValidation, async (req, res) => {
 
 router.get('/verify', async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = req.cookies?.token || req.headers.authorization?.split(' ')[1];
 
     if (!token) {
       return res.status(401).json({
@@ -197,6 +218,14 @@ router.get('/verify', async (req, res) => {
       message: 'Token inválido o expirado'
     });
   }
+});
+
+router.post('/logout', (req, res) => {
+  clearAuthCookie(res);
+  res.json({
+    success: true,
+    message: 'Sesión cerrada correctamente'
+  });
 });
 
 export default router;
