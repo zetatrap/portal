@@ -1,0 +1,619 @@
+VERSION DEFINITIVA - GUIA EJECUTIVA DE IMPLEMENTACION
+=======================================================
+
+ESTA ES LA VERSION DEFINITIVA Y EXACTA DEL PROYECTO.
+No es una guía opcional. Es la base de trabajo que define la arquitectura, el flujo de venta, el manejo de licencias, los emails automáticos y la preparación para Stripe.
+
+Objetivo principal:
+Construir una tienda de beats robusta, segura y operativa, donde la compra sea el flujo central, el admin pueda subir y controlar el catálogo, y cada venta genere automáticamente un correo con licencia y ticket para el cliente y una copia para el negocio.
+
+Reglas no negociables:
+- La venta no se basa en login como centro del negocio.
+- El beat se vende siempre junto a una licencia válida.
+- El precio final debe calcularse en backend.
+- La compra debe generar ticket + licencia PDF.
+- El cliente debe recibir el email con documentos.
+- El negocio debe recibir el duplicado del mismo email.
+- Stripe solo se integra cuando la lógica de negocio está establecida.
+
+El proyecto debe quedar listo para integrarse con Stripe sin reescribir la lógica de negocio, ni dejar huecos en validaciones, logística de venta o entrega digital.
+
+------------------------------------------------------------
+0) DECISION FINAL DE ARQUITECTURA
+------------------------------------------------------------
+
+0.1. Estructura funcional aceptada
+- Frontend: catálogo, carrito, checkout, confirmación visual
+- Backend: validación, ordenes, precios reales, documentos, emails
+- Admin: beats, licencias, precios, PDFs, ventas
+- Stripe: solamente como capa de pago final
+
+0.2. Regla del negocio
+- No se vende un beat sin licencia.
+- No se acepta una licencia que no pertenezca al beat.
+- No se calcula precio por beat sin tener en cuenta la licencia elegida.
+- No se confirma una compra sin generar docs y correos.
+
+0.3. Entregables obligatorios por compra
+- ticket PDF
+- licencia PDF específica para la licencia elegida
+- email al cliente con documentos
+- email duplicado al negocio
+- registro de la compra
+
+------------------------------------------------------------
+1) FILOSOFIA DE NEGOCIO Y ARQUITECTURA
+------------------------------------------------------------
+
+------------------------------------------------------------
+1) FILOSOFIA DE NEGOCIO Y ARQUITECTURA
+------------------------------------------------------------
+
+1.1. Principio central
+- La compra debe ser el eje del sistema.
+- El login/registro puede existir como soporte, pero no debe ser la base para vender.
+- La tienda debe funcionar por compra directa con carrito, checkout y confirmación.
+- El admin debe controlar catálogo, licencias, enlaces, precios, disponibilidad y ventas.
+
+1.2. Misión del negocio
+- Vender beats de forma profesional.
+- Cada beat puede tener varias licencias y distintos precios.
+- Cada compra debe generar un comprobante y un documento legal de licencia.
+- Cada compra debe enviar un email automático tanto al cliente como al owner del negocio.
+- El cliente debe recibir un ticket y la licencia apropiada según la licencia elegida.
+
+1.3. Modelo recomendado de negocio
+- Producto principal: beat
+- Licencias: Basic, Premium, Exclusive, Broadcast, etc.
+- Cada licencia tiene:
+  - nombre
+  - precio
+  - descripción
+  - permisos de uso
+  - exclusividad
+  - limite de streams
+  - uso comercial / no comercial
+  - archivo adjunto PDF de licencia
+
+1.4. Diferencia clave entre beat y licencia
+- El beat es el producto base.
+- La licencia es la forma de uso comercial o de distribución del beat.
+- La licencia debe estar embebida en la compra final.
+- El precio no se calcula solo por beat, sino por beat + licencia elegida.
+
+------------------------------------------------------------
+2) MODELO DE LICENCIAS Y PRECIOS POR BEAT
+------------------------------------------------------------
+
+2.1. Cada beat puede tener varias opciones de licencia
+Ejemplo base:
+- Basic License - $49
+- Pro License - $149
+- Premium License - $299
+- Exclusive License - $1,500
+
+2.2. Cada licencia debe tener datos claros
+- id
+- beatId
+- name
+- slug
+- price
+- description
+- usageRights
+- commercialUse
+- isActive
+- fileNamePdf
+
+2.3. Regla importante
+- El precio final debe calcularse con la licencia elegida, no con un precio fijo por beat.
+- Si el beat tiene varios planes, el backend debe validar que la licencia exista y esté activa.
+- Si la licencia no existe o no corresponde al beat, la compra debe rechazarse.
+
+2.4. Data model recomendado
+- beats
+- licenses
+- orders
+- order_items
+- payments
+- customers
+- email_logs
+
+2.5. Validación obligatoria
+- [ ] el beat existe
+- [ ] la licencia pertenece al beat
+- [ ] la licencia está activa
+- [ ] el precio enviado coincide con el precio real de BD
+- [ ] la compra no puede elegir una licencia inexistente
+
+------------------------------------------------------------
+3) FLUJO DE COMPRA Y ORDENES
+------------------------------------------------------------
+
+3.1. Flujo principal correcto
+1. Cliente entra a catálogo
+2. Elige beat
+3. Elige licencia del beat
+4. Agrega al carrito
+5. Revisa checkout
+6. Completa nombre y email
+7. El backend crea la orden
+8. El backend valida el beat + licencia + precio
+9. Se marca la orden en estado pending
+10. Se confirma el pago o pago simulado
+11. Se genera la licencia y el ticket
+12. Se envía email al cliente
+13. Se envía email duplicado al negocio
+14. Se limpia carrito y se finaliza la compra
+
+3.2. Reglas obligatorias del checkout
+- [ ] no permitir carrito vacío
+- [ ] no permitir beat inexistente
+- [ ] no permitir licencia inválida
+- [ ] no permitir precio incorrecto
+- [ ] no permitir cantidades menores a 1
+- [ ] no permitir duplicación por doble click o reintento
+- [ ] el total debe calcularse en backend, nunca confiar en frontend
+- [ ] la orden debe quedar en pending antes del pago
+
+3.3. Estados recomendados
+- pending: creada, esperando pago
+- processing: pago en curso
+- completed: pago confirmado
+- cancelled: cancelada
+- refunded: reembolsada
+
+3.4. Estados de pago recomendados
+- pending
+- paid
+- failed
+- refunded
+
+------------------------------------------------------------
+4) BACKEND: ENDPOINTS Y VALIDACIONES REALES
+------------------------------------------------------------
+
+4.1. Productos y licencias
+- [ ] GET /api/beats -> listar beats activos
+- [ ] GET /api/beats/:id -> detalle del beat
+- [ ] GET /api/beats/:id/licenses -> licencias disponibles del beat
+- [ ] GET /api/licenses/:id -> detalle de licencia
+
+4.2. Checkout y ordenes
+- [ ] POST /api/orders/checkout
+- Debe recibir:
+  - buyerName
+  - buyerEmail
+  - items[] con: beatId, licenseId, quantity
+- Debe validar:
+  - buyerName no vacío
+  - buyerEmail válido
+  - item presente
+  - beat existe y está activo
+  - licencia existe y pertenece al beat
+  - cantidad válida
+  - total calculado correctamente
+  - no aceptar datos manipulados del frontend
+
+4.3. Confirmación de compra
+- [ ] POST /api/orders/checkout/complete/:orderId
+- Debe comprobar que la orden exista
+- Debe actualizar:
+  - status = completed
+  - payment_status = paid
+  - paidAt = fecha actual
+- Debe disparar la entrega del email con ticket + licencia PDF
+- Debe dejar registro de email enviado con éxito o error
+
+4.4. Detalles de orden
+- [ ] GET /api/orders/:id
+- [ ] GET /api/orders/customer/:customerId
+- [ ] GET /api/orders/admin/list
+
+4.5. Reglas de seguridad del backend
+- [ ] usar consultas parametrizadas
+- [ ] validar tipos numéricos
+- [ ] validar longitud máxima de campos
+- [ ] no confiar en valores del frontend para total/price/license
+- [ ] no devolver stack trace al cliente
+- [ ] registrar errores con contexto útil
+- [ ] no permitir un cliente elegir una licencia no autorizada
+
+------------------------------------------------------------
+5) ADMIN PANEL: CONTROL TOTAL DEL CATALOGO
+------------------------------------------------------------
+
+5.1. Funcionalidades del admin
+- [ ] listar beats activos/inactivos
+- [ ] crear beat
+- [ ] editar beat
+- [ ] eliminar beat
+- [ ] activar/desactivar beat
+- [ ] crear licencias por beat
+- [ ] editar licencias por beat
+- [ ] borrar licencias
+- [ ] establecer precio por licencia
+- [ ] asociar PDF de licencia por licencia
+- [ ] buscar por nombre, categoria o etiqueta
+- [ ] ver ventas por producto
+- [ ] ver ventas por licencia
+
+5.2. Campos mínimos de beat
+- name
+- slug
+- description
+- category
+- priceBase
+- imageUrl
+- audioUrl
+- isActive
+- isFeatured
+
+5.3. Campos mínimos de licencia
+- beatId
+- name
+- slug
+- price
+- description
+- usageRights
+- isActive
+- pdfFileName
+
+5.4. Validaciones admin
+- [ ] nombre obligatorio
+- [ ] slug obligatorio y único
+- [ ] precio valido y > 0
+- [ ] categoría válida
+- [ ] imagen opcional pero si existe debe ser URL válida
+- [ ] audio opcional pero si existe debe ser URL válida
+- [ ] no permitir licencias vacías o duplicadas
+
+5.5. Endpoints recomendados
+- [ ] GET /api/admin/beats
+- [ ] POST /api/admin/beats
+- [ ] PUT /api/admin/beats/:id
+- [ ] DELETE /api/admin/beats/:id
+- [ ] GET /api/admin/beats/:id/licenses
+- [ ] POST /api/admin/beats/:id/licenses
+- [ ] PUT /api/admin/beats/:id/licenses/:licenseId
+- [ ] DELETE /api/admin/beats/:id/licenses/:licenseId
+
+------------------------------------------------------------
+6) EMAIL AUTOMATICO AL FINALIZAR LA COMPRA
+------------------------------------------------------------
+
+6.1. Requerimiento central del negocio
+Cuando una compra termine correctamente, el sistema debe enviar automáticamente:
+- un email al cliente
+- un email duplicado al correo del negocio
+
+6.2. Email del cliente
+Debe incluir:
+- nombre del cliente
+- nombre del beat
+- nombre de la licencia comprada
+- precio pagado
+- fecha de compra
+- numero de orden
+- download links o instrucciones de acceso
+- archivo PDF de licencia
+- ticket de compra
+- mensaje de agradecimiento
+
+6.3. Email del negocio
+Debe incluir:
+- nombre del cliente
+- email del cliente
+- beat comprado
+- licencia comprada
+- precio final
+- número de orden
+- fecha de compra
+- estado de pago
+- copia del ticket
+- copia de la licencia digital
+
+6.4. Duplicado de compras
+- [ ] cada compra debe generar una copia para el negocio
+- [ ] el email del negocio no debe ser opcional
+- [ ] toda compra debe quedar logueada con el estado del envío
+- [ ] si falla el email al cliente, debe quedar registro del fallo y reintento manual
+
+6.5. Recomendado para la entrega digital
+- El email debe adjuntar el PDF de licencia
+- El email debe incluir el ticket PDF o un enlace al ticket generado
+- El PDF debe ser específico por licencia y por compra
+- La licencia debe ser distinta según la licencia elegida
+
+6.6. Archivos generados por la compra
+- [ ] invoice.pdf o ticket.pdf
+- [ ] license.pdf
+- [ ] metadata con orderId, beatId, licenseId, customerEmail
+
+6.7. Lógica ideal
+- al confirmar compra, backend genera:
+  - ticket PDF
+  - licencia PDF según la licencia
+  - payload de email con ambos documentos
+- backend envía correo al cliente
+- backend envía correo duplicado al negocio
+- se marca en BD: emailEnviadoCliente = true / false
+- se marca en BD: emailEnviadoAdmin = true / false
+
+------------------------------------------------------------
+7) GENERACION DE PDF: LICENCIA Y TICKET
+------------------------------------------------------------
+
+7.1. Requerimientos de documento PDF
+- El PDF de licencia debe ser específico para la licencia comprada.
+- El PDF del ticket debe estar ligado a la orden y al cliente.
+- El contenido debe ser claro, profesional y usable como comprobante.
+
+7.2. Información obligatoria del ticket
+- nombre del cliente
+- email del cliente
+- número de orden
+- fecha de compra
+- beat comprado
+- licencia comprada
+- monto total
+- método de pago
+- estado de pago
+- observación legal
+
+7.3. Información obligatoria de la licencia
+- nombre del beat
+- nombre del comprador
+- tipo de licencia
+- derechos de uso
+- limitaciones
+- restricciones legales
+- fecha de compra
+- responsable del negocio / propietario
+- referencia de orden
+
+7.4. Reglas de robustez para PDFs
+- [ ] no crear dos PDFs iguales para licencias distintas
+- [ ] no reutilizar PDF de otra compra
+- [ ] no envíar ticket sin orden validada
+- [ ] no envíar licencia sin que la compra esté completed
+- [ ] cada archivo debe ser asociable a la orden correspondiente
+
+------------------------------------------------------------
+8) FRONTEND: COMPRAS, CHECKOUT Y ENTREGABLES
+------------------------------------------------------------
+
+8.1. Catalogo
+- [ ] mostrar beats activos
+- [ ] mostrar licencias por beat
+- [ ] mostrar precio de cada licencia
+- [ ] mostrar diferencia entre licencias y permisos
+- [ ] permitir elegir la licencia antes de agregar al carrito
+
+8.2. Carrito
+- [ ] guardar items con beatId + licenseId
+- [ ] mostrar precio de licencia actual
+- [ ] mostrar total correcto
+- [ ] recalcular total por licencia
+
+8.3. Checkout
+- [ ] mostrar nombre, email, licencias seleccionadas
+- [ ] mostrar resumen final de compra
+- [ ] confirmar pago
+- [ ] loader y bloqueo de doble click
+- [ ] redirigir a success state al finalizar
+
+8.4. UX importante
+- [ ] si eliges licencia distinta, se actualiza el total
+- [ ] si cambia la licencia, el resumen se actualiza en tiempo real
+- [ ] si la licencia no existe, se muestra error claro
+- [ ] el cliente debe ver el documento que recibe al final
+
+------------------------------------------------------------
+9) STRIPE PREPARACION
+------------------------------------------------------------
+
+9.1. Variables de entorno para Stripe
+- [ ] STRIPE_SECRET_KEY
+- [ ] STRIPE_PUBLISHABLE_KEY
+- [ ] STRIPE_WEBHOOK_SECRET
+- [ ] FRONTEND_URL
+- [ ] BACKEND_URL
+
+9.2. Patrón correcto para Stripe
+- frontend crea la orden localmente
+- backend valida la compra y la licencia
+- backend crea la sesión de Stripe o PaymentIntent
+- frontend redirige a Stripe
+- Stripe devuelve al cliente a la app
+- webhook confirma el pago
+- backend marca la orden como completed y dispara emails PDF
+
+9.3. Webhook recomendado
+- [ ] checkout.session.completed
+- [ ] payment_intent.succeeded
+- [ ] payment_intent.payment_failed
+
+9.4. Reglas de integración con invoice/licencia
+- [ ] el webhook no debe entregar documentos si la orden no es válida
+- [ ] el webhook debe completar la orden antes de enviar email
+- [ ] los PDFs deben generarse solo cuando el pago está confirmado
+
+------------------------------------------------------------
+10) SEGURIDAD Y ROBUSTEZ GENERAL
+------------------------------------------------------------
+
+10.1. Seguridad backend
+- [ ] helmet
+- [ ] cors configurado
+- [ ] rate limit
+- [ ] cookies HttpOnly + Secure + SameSite
+- [ ] no exponer JWT/token en localStorage
+- [ ] no usar innerHTML con contenido de usuario
+- [ ] no aceptar inputs maliciosos
+
+10.2. Seguridad de compra
+- [ ] validar exactitud del precio del producto
+- [ ] validar exactitud de la licencia seleccionada
+- [ ] validar el total por backend
+- [ ] evitar manipulación del monto desde el frontend
+- [ ] comprobar que la compra no se duplica
+
+10.3. Seguridad de emails
+- [ ] no enviar correos si no hubo pago confirmado
+- [ ] usar templates profesionales
+- [ ] validar emails correctamente antes de enviar
+- [ ] loguear éxito/error de envío
+- [ ] no filtrar información sensible en logs públicos
+
+10.4. Error handling
+- [ ] manejar validación con mensajes claros
+- [ ] manejar errores de DB con rollback si aplica
+- [ ] no mostrar stacktrace al cliente
+- [ ] reportar errores con contexto útil a admin logs
+
+------------------------------------------------------------
+11) CHECKLIST DE IMPLEMENTACION POR FASES
+------------------------------------------------------------
+
+FASE 1 - Base de negocio y checkout
+- [ ] carrito funcional y persistente
+- [ ] elegir beat + elegir licencia
+- [ ] price real por licencia
+- [ ] checkout con validación fuerte
+- [ ] orden creada correctamente
+- [ ] status pending/paid/completed controlado
+- [ ] sesión segura de compra
+
+FASE 2 - Admin + catálogo + licencias
+- [ ] CRUD beat
+- [ ] CRUD licencia por beat
+- [ ] activa/inactiva por licencia
+- [ ] precio y permisos por licencia
+- [ ] PDF de licencia asociado
+- [ ] ventas por beat y por licencia
+
+FASE 3 - Emails y documentos
+- [ ] ticket PDF generado
+- [ ] licencia PDF generado según licencia
+- [ ] email al cliente con enlace o adjunto
+- [ ] email duplicado al negocio
+- [ ] registro de envío
+- [ ] fallback ante error
+
+FASE 4 - Stripe
+- [ ] envs configuradas
+- [ ] sesión creada
+- [ ] webhook funcionando
+- [ ] confirmación de pago
+- [ ] generación de docs y emails reales
+
+FASE 5 - Pulido final
+- [ ] UX de checkout
+- [ ] UX de admin
+- [ ] validación final
+- [ ] limpieza general
+- [ ] release test
+
+------------------------------------------------------------
+12) CRITERIO DE LISTO PARA PRODUCTION
+------------------------------------------------------------
+
+El proyecto estará listo para producción cuando:
+- [ ] la compra y la licencia estén bien validadas
+- [ ] el total se calcula en backend
+- [ ] cada beat puede tener múltiples licencias y precios
+- [ ] el cliente recibe ticket + licencia PDF
+- [ ] el negocio recibe copia del mismo email
+- [ ] la orden cambia de estado apropiadamente
+- [ ] el admin puede subir y administrar beats/licencias
+- [ ] Stripe puede integrarse sin tocar la lógica de negocio
+
+------------------------------------------------------------
+13) TAREAS MINIMAS EN ORDEN PARA NO PERDER TIEMPO
+------------------------------------------------------------
+
+1. Dejar hecho el negocio de compra y licencias
+   - [ ] beat + licencia + precio + validación
+   - [ ] checkout con orden y pago pendiente
+   - [ ] confirmación de compra
+
+2. Completar admin y catálogo
+   - [ ] CRUD beats
+   - [ ] CRUD licencias
+   - [ ] PDF y precios por licencia
+
+3. Implementar emails y documentos
+   - [ ] ticket PDF
+   - [ ] licencia PDF por tipo
+   - [ ] email al cliente
+   - [ ] email al negocio
+
+4. Preparar Stripe
+   - [ ] sesión real
+   - [ ] webhook real
+   - [ ] confirmación final
+
+5. Pulir test final
+   - [ ] flujo completo de compra
+   - [ ] validación de emails y documentos
+   - [ ] seguridad y estabilidad final
+
+------------------------------------------------------------
+14) RECOMENDACION FINAL
+------------------------------------------------------------
+
+La prioridad real es esta:
+
+1. Compra + licencias + validaciones + orden
+2. Admin del catálogo + precios + PDFs de licencias
+3. Emails automáticos al cliente y al negocio con ticket/licencia
+4. Stripe como capa final de pago
+5. Pulido final y pruebas reales
+
+Esto te deja un sistema coherente y profesional: un negocio claro, una venta segura, un admin usable y un flujo listo para crecer sin reescribir la base.
+
+------------------------------------------------------------
+15) CHECKLIST EJECUTIVA RAPIDA
+------------------------------------------------------------
+
+Backend:
+- [ ] /api/beats funcionando
+- [ ] /api/beats/:id/licenses funcionando
+- [ ] /api/orders/checkout funcionando
+- [ ] /api/orders/checkout/complete/:orderId funcionando
+- [ ] validación de beat + licencia + precio
+- [ ] emails automáticos activados
+- [ ] generation de PDFs por compra
+
+Frontend:
+- [ ] catálogo visible
+- [ ] selector de licencia por beat
+- [ ] carrito con precios correctos
+- [ ] checkout con resumen claro
+- [ ] confirmación final con mensaje de éxito
+
+Admin:
+- [ ] CRUD beats y licencias
+- [ ] precios y permisos por licencia
+- [ ] PDF por licencia cargado
+- [ ] panel de ventas y comprobantes
+
+Emails y documentos:
+- [ ] ticket PDF para cliente
+- [ ] licencia PDF específica por compra
+- [ ] email al cliente con documentos
+- [ ] email al negocio con duplicado
+- [ ] logs de envío
+
+Stripe:
+- [ ] variables cargadas
+- [ ] sesión real creada
+- [ ] webhook listo
+- [ ] flujo local validado
+
+------------------------------------------------------------
+16) MISION DEL SIGUIENTE PASO
+------------------------------------------------------------
+
+La misión inmediata no es “integrar Stripe primero”, sino dejar bien resuelto el core del negocio: beat + licencia + precio + orden + validación + emails + documentos. Cuando ese núcleo esté sólido, Stripe es solo la capa de pago encima de un sistema que ya sabe vender y entregar correctamente.
+
