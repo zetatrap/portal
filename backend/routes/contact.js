@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import { query } from '../config/database.js';
+import { logAdminActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -34,6 +35,19 @@ router.post('/', contactValidation, async (req, res) => {
        RETURNING id`,
       [name, email, message, ipAddress, userAgent]
     );
+
+    await logAdminActivity({
+      action: 'contact',
+      entityType: 'contact',
+      entityId: result[0]?.id ?? null,
+      entityName: name,
+      details: {
+        email,
+        ipAddress,
+        userAgent,
+      },
+      userName: name,
+    });
 
     res.status(201).json({
       success: true,

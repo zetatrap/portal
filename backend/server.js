@@ -11,6 +11,7 @@ import { testConnection } from './config/database.js';
 import authRoutes from './routes/auth.js';
 import productsRoutes from './routes/products.js';
 import adminProductsRoutes from './routes/adminProducts.js';
+import adminActivityRoutes from './routes/adminActivity.js';
 import contactRoutes from './routes/contact.js';
 import ordersRoutes from './routes/orders.js';
 
@@ -83,6 +84,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/admin/products', adminProductsRoutes);
+app.use('/api/admin/activity', adminActivityRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/orders', ordersRoutes);
 
@@ -95,6 +97,7 @@ app.get('/', (req, res) => {
     endpoints: {
       auth: '/api/auth',
       products: '/api/products',
+      admin: '/api/admin',
       contact: '/api/contact',
       orders: '/api/orders'
     }

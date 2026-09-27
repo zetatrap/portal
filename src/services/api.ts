@@ -105,6 +105,10 @@ export const adminProductsService = {
     return await request('/admin/products');
   },
 
+  getActivity: async () => {
+    return await request('/admin/activity');
+  },
+
   create: async (payload: {
     name: string;
     slug?: string;

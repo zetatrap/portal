@@ -1,5 +1,6 @@
 import express from 'express';
 import { query } from '../config/database.js';
+import { logAdminActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
@@ -94,6 +95,21 @@ router.post('/', async (req, res) => {
       ]
     );
 
+    await logAdminActivity({
+      action: 'create',
+      entityType: 'beat',
+      entityId: result[0]?.id ?? null,
+      entityName: result[0]?.name || name,
+      details: {
+        slug: result[0]?.slug || productSlug,
+        price: Number(result[0]?.price ?? price),
+        categorySlug: categorySlug || 'beats',
+        isActive: Boolean(isActive),
+        isFeatured: Boolean(isFeatured),
+      },
+      userName: 'admin',
+    });
+
     res.status(201).json({
       success: true,
       message: 'Beat creado correctamente',
@@ -175,6 +191,21 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    await logAdminActivity({
+      action: 'update',
+      entityType: 'beat',
+      entityId: Number(id),
+      entityName: result[0]?.name || name,
+      details: {
+        slug: result[0]?.slug || slug,
+        price: Number(result[0]?.price ?? price),
+        categorySlug: categorySlug || 'beats',
+        isActive: Boolean(isActive),
+        isFeatured: Boolean(isFeatured),
+      },
+      userName: 'admin',
+    });
+
     res.json({
       success: true,
       message: 'Beat actualizado correctamente',
@@ -205,6 +236,19 @@ router.delete('/:id', async (req, res) => {
         message: 'Beat no encontrado',
       });
     }
+
+    await logAdminActivity({
+      action: 'delete',
+      entityType: 'beat',
+      entityId: Number(id),
+      entityName: result[0]?.name || 'Beat eliminado',
+      details: {
+        slug: result[0]?.slug || null,
+        price: Number(result[0]?.price ?? 0),
+        deletedAt: new Date().toISOString(),
+      },
+      userName: 'admin',
+    });
 
     res.json({
       success: true,

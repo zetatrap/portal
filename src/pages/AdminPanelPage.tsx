@@ -31,48 +31,6 @@ type FormState = {
   is_active: boolean
 }
 
-const exampleProducts: AdminProduct[] = [
-  {
-    id: 1,
-    name: 'Neon Sunset',
-    slug: 'neon-sunset',
-    category_slug: 'beats',
-    price: 49.99,
-    description: 'Beat melódico con atmósfera nocturna y groove suave para rap y R&B.',
-    image_url: '🌆',
-    audio_url: 'https://audio.example.com/neon-sunset.mp3',
-    rating: 5,
-    is_featured: true,
-    is_active: true,
-  },
-  {
-    id: 2,
-    name: 'Midnight Drift',
-    slug: 'midnight-drift',
-    category_slug: 'beats',
-    price: 39.99,
-    description: 'Instrumental de trap con 808 profundo y sintetizadores de alto brillo.',
-    image_url: '🌙',
-    audio_url: 'https://audio.example.com/midnight-drift.mp3',
-    rating: 4.5,
-    is_featured: true,
-    is_active: true,
-  },
-  {
-    id: 3,
-    name: 'Street Echo',
-    slug: 'street-echo',
-    category_slug: 'instrumentales',
-    price: 59.99,
-    description: 'Beat urbano con percusión marcada y vibra de calle para hooks intensos.',
-    image_url: '🎧',
-    audio_url: 'https://audio.example.com/street-echo.mp3',
-    rating: 4.8,
-    is_featured: false,
-    is_active: true,
-  },
-]
-
 const emptyForm = (): FormState => ({
   name: '',
   slug: '',
@@ -102,18 +60,19 @@ const AdminPanelPage = () => {
   const loadProducts = async () => {
     setLoading(true)
     setError('')
+    setMessage('')
 
     try {
       const response = await adminProductsService.getAll()
       const data = Array.isArray(response?.data) ? response.data : []
-      setProducts(data.length > 0 ? data : exampleProducts)
+      setProducts(data)
 
       if (data.length === 0) {
-        setMessage('No hay beats en la base de datos; se mostraron ejemplos de prueba.')
+        setMessage('No hay beats registrados en la base de datos todavía.')
       }
     } catch (err: any) {
       console.error('Error al cargar beats del admin:', err)
-      setProducts(exampleProducts)
+      setProducts([])
       setError(err.message || 'No se pudo conectar con el backend.')
     } finally {
       setLoading(false)
@@ -128,12 +87,6 @@ const AdminPanelPage = () => {
   const resetForm = () => {
     setSelectedId(null)
     setForm(emptyForm())
-  }
-
-  const applyExampleProducts = () => {
-    setProducts(exampleProducts)
-    resetForm()
-    setMessage('Se vincularon los beats de ejemplo a la vista del panel.')
   }
 
   const handleFieldChange = (field: keyof FormState, value: string | boolean) => {
@@ -227,10 +180,10 @@ const AdminPanelPage = () => {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={applyExampleProducts}
-              className="px-5 py-3 rounded-full border border-crimson/40 bg-crimson/10 text-white hover:bg-crimson/20 transition-colors"
+              onClick={() => window.open('/admin/db', '_blank', 'noopener,noreferrer')}
+              className="px-5 py-3 rounded-full border border-cyan-500/40 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20 transition-colors"
             >
-              Vincular beats de ejemplo
+              DB
             </button>
             <Link to="/tienda" className="inline-flex items-center px-5 py-3 rounded-full bg-gradient-to-r from-crimson to-neon-red text-white font-bold">
               Ver tienda

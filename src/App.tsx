@@ -9,6 +9,7 @@ import CartPage from './pages/CartPage'
 import CheckoutPage from './pages/CheckoutPage'
 import PurchaseFormPage from './pages/PurchaseFormPage'
 import AdminPanelPage from './pages/AdminPanelPage'
+import AdminDbPage from './pages/AdminDbPage'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/purchase-form" element={<PurchaseFormPage />} />
             <Route path="/admin" element={<AdminPanelPage />} />
+            <Route path="/admin/db" element={<AdminDbPage />} />
           </Routes>
         </div>
       </CartProvider>

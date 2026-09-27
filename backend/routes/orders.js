@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
 import { query } from '../config/database.js';
+import { logAdminActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -134,6 +135,22 @@ const createCheckoutOrder = async ({ buyerName, buyerEmail, buyerPhone, buyerMes
       [orderId, item.productId, item.quantity, item.price, item.subtotal]
     );
   }
+
+  await logAdminActivity({
+    action: 'sale_created',
+    entityType: 'order',
+    entityId: Number(orderId),
+    entityName: `Order #${orderId}`,
+    details: {
+      buyerName: buyerName?.trim() || null,
+      buyerEmail: buyerEmail ? String(buyerEmail).trim().toLowerCase() : null,
+      totalAmount: Number(totalAmount),
+      itemCount: orderItems.length,
+      paymentMethod: paymentMethod || 'pending',
+      status: 'pending',
+    },
+    userName: buyerName?.trim() || buyerEmail || 'system',
+  });
 
   const token = jwt.sign(
     {
@@ -272,6 +289,23 @@ router.post('/checkout/complete/:orderId', async (req, res) => {
        WHERE id = $1`,
       [orderId]
     );
+
+    const order = await query('SELECT * FROM orders WHERE id = $1 LIMIT 1', [orderId]);
+
+    await logAdminActivity({
+      action: 'payment_confirmed',
+      entityType: 'order',
+      entityId: Number(orderId),
+      entityName: `Order #${orderId}`,
+      details: {
+        buyerName: order[0]?.buyer_name || null,
+        buyerEmail: order[0]?.buyer_email || null,
+        totalAmount: Number(order[0]?.total_amount || 0),
+        paymentStatus: 'paid',
+        status: 'completed',
+      },
+      userName: order[0]?.buyer_name || order[0]?.buyer_email || 'system',
+    });
 
     clearAuthCookie(res);
 

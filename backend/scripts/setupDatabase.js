@@ -38,12 +38,8 @@ async function setupDatabase() {
     await pool.query(schema);
 
     console.log('✅ Tablas creadas');
-    console.log('✅ Datos de ejemplo insertados');
     console.log('\n🎉 ¡Base de datos lista!\n');
     console.log('📊 Base conectada: ' + (process.env.DB_NAME || 'beats_store'));
-    console.log('👤 Usuario de prueba:');
-    console.log('   Email: test@laordencrew.com');
-    console.log('   Password: Test123!\n');
   } catch (error) {
     console.error('❌ Error al configurar la base de datos:', error.message);
     process.exit(1);
