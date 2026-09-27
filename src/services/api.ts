@@ -109,7 +109,7 @@ export const adminProductsService = {
     return await request('/admin/activity');
   },
 
-  create: async (payload: {
+  create: async (payload: FormData | {
     name: string;
     slug?: string;
     description: string;
@@ -121,13 +121,17 @@ export const adminProductsService = {
     isFeatured?: boolean;
     isActive?: boolean;
   }) => {
+    const isFormData = payload instanceof FormData;
     return await request('/admin/products', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: isFormData ? payload : JSON.stringify(payload),
+      headers: isFormData ? undefined : {
+        'Content-Type': 'application/json',
+      },
     });
   },
 
-  update: async (id: number, payload: {
+  update: async (id: number, payload: FormData | {
     name: string;
     slug?: string;
     description: string;
@@ -139,9 +143,13 @@ export const adminProductsService = {
     isFeatured?: boolean;
     isActive?: boolean;
   }) => {
+    const isFormData = payload instanceof FormData;
     return await request(`/admin/products/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(payload),
+      body: isFormData ? payload : JSON.stringify(payload),
+      headers: isFormData ? undefined : {
+        'Content-Type': 'application/json',
+      },
     });
   },
 

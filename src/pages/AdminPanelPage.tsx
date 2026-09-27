@@ -52,6 +52,7 @@ const AdminPanelPage = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null)
 
   useEffect(() => {
     loadProducts()
@@ -87,6 +88,36 @@ const AdminPanelPage = () => {
   const resetForm = () => {
     setSelectedId(null)
     setForm(emptyForm())
+    setSelectedAudioFile(null)
+  }
+
+  const handleAudioFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+
+    if (!file) {
+      setSelectedAudioFile(null)
+      setError('')
+      return
+    }
+
+    const isSupportedMime = file.type.includes('audio') || file.name.toLowerCase().endsWith('.wav') || file.name.toLowerCase().endsWith('.mp3')
+
+    if (!isSupportedMime) {
+      setError('El archivo debe ser un WAV válido o un archivo de audio soportado.')
+      setSelectedAudioFile(null)
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      setError('El archivo supera el límite de 25 MB.')
+      setSelectedAudioFile(null)
+      event.target.value = ''
+      return
+    }
+
+    setError('')
+    setSelectedAudioFile(file)
   }
 
   const handleFieldChange = (field: keyof FormState, value: string | boolean) => {
@@ -136,12 +167,23 @@ const AdminPanelPage = () => {
         isActive: form.is_active,
       }
 
+      const formData = new FormData()
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          formData.append(key, String(value))
+        }
+      })
+
+      if (selectedAudioFile) {
+        formData.append('audioFile', selectedAudioFile)
+      }
+
       if (selectedId) {
-        const response = await adminProductsService.update(selectedId, payload)
+        const response = await adminProductsService.update(selectedId, formData)
         setProducts((current) => current.map((product) => product.id === selectedId ? response.data : product))
         setMessage('Beat actualizado correctamente.')
       } else {
-        const response = await adminProductsService.create(payload)
+        const response = await adminProductsService.create(formData)
         setProducts((current) => [response.data, ...current])
         setMessage('Nuevo beat creado correctamente.')
       }
@@ -295,10 +337,35 @@ const AdminPanelPage = () => {
                       value={form.audio_url}
                       onChange={(event) => handleFieldChange('audio_url', event.target.value)}
                       className="w-full bg-transparent outline-none"
-                      placeholder="https://..."
+                      placeholder="https://... o dejar vacío si subís archivo"
                     />
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-dashed border-crimson/30 bg-black/20 p-4">
+                <label className="block text-sm text-gray-300 mb-2">Archivo WAV / audio</label>
+                <input
+                  type="file"
+                  accept=".wav,audio/wav,audio/mpeg,audio/mp3"
+                  onChange={handleAudioFileChange}
+                  className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-crimson file:text-white file:font-semibold hover:file:bg-crimson/90"
+                />
+                <p className="mt-2 text-xs text-gray-400">
+                  {selectedAudioFile ? `Archivo listo: ${selectedAudioFile.name}` : 'Puedes subir un archivo WAV directamente o dejar una URL externa.'}
+                </p>
+                {selectedAudioFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAudioFile(null)
+                      setError('')
+                    }}
+                    className="mt-3 text-xs text-red-300 underline hover:text-red-200"
+                  >
+                    Quitar archivo seleccionado
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

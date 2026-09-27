@@ -1,8 +1,91 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
 import { query } from '../config/database.js';
 import { logAdminActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
+const uploadDir = path.resolve(process.cwd(), 'uploads');
+
+fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const safeName = file.originalname
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9._-]/g, '');
+
+    const timestamp = Date.now();
+    const extension = path.extname(safeName) || '.wav';
+    cb(null, `${timestamp}-${safeName || 'beat'}${extension}`);
+  },
+});
+
+const allowedMimeTypes = ['audio/wav', 'audio/x-wav', 'audio/wave', 'audio/mpeg', 'audio/mp3'];
+const upload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const isAllowedName = /\.(wav|mp3|mpeg|m4a)$/i.test(file.originalname || '');
+    const isAllowedType = allowedMimeTypes.includes(file.mimetype);
+
+    if (isAllowedName || isAllowedType) {
+      cb(null, true);
+      return;
+    }
+
+    cb(new Error('Solo se aceptan archivos de audio WAV o MP3.'));
+  },
+});
+
+const sanitizeSlug = (value = '') => {
+  const nextValue = String(value).trim().toLowerCase();
+  const slug = nextValue
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9\-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return slug || 'beat';
+};
+
+const normalizeBoolean = (value, fallback) => {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  }
+
+  return Boolean(value);
+};
+
+const normalizeAudioUrl = (value) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const deleteUploadedAudio = (audioUrl) => {
+  if (!audioUrl || typeof audioUrl !== 'string' || !audioUrl.startsWith('/uploads/')) {
+    return;
+  }
+
+  const localPath = path.resolve(process.cwd(), `.${audioUrl}`);
+  fs.rm(localPath, { force: true }).catch(() => {});
+};
 
 router.get('/', async (req, res) => {
   try {
@@ -31,8 +114,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', upload.single('audioFile'), async (req, res) => {
   try {
+    const body = req.body || {};
     const {
       name,
       slug,
@@ -44,12 +128,25 @@ router.post('/', async (req, res) => {
       rating,
       isFeatured,
       isActive,
-    } = req.body;
+    } = body;
 
-    if (!name || !description || !price) {
+    const trimmedName = String(name || '').trim();
+    const trimmedDescription = String(description || '').trim();
+    const parsedPrice = Number(price);
+    const uploadedAudioPath = req.file ? `/uploads/${req.file.filename}` : null;
+    const finalAudioUrl = uploadedAudioPath || normalizeAudioUrl(audioUrl);
+
+    if (!trimmedName || !trimmedDescription || !price || Number.isNaN(parsedPrice) || parsedPrice <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Nombre, descripción y precio son obligatorios',
+        message: 'Nombre, descripción y precio válido son obligatorios',
+      });
+    }
+
+    if (!finalAudioUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Debes subir un archivo WAV/MP3 o indicar una URL de audio.',
       });
     }
 
@@ -65,7 +162,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const productSlug = slug || String(name).toLowerCase().replace(/\s+/g, '-');
+    const productSlug = sanitizeSlug(slug || trimmedName);
 
     const result = await query(
       `INSERT INTO products (
@@ -82,16 +179,16 @@ router.post('/', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`,
       [
-        name,
+        trimmedName,
         productSlug,
-        description,
-        Number(price),
+        trimmedDescription,
+        parsedPrice,
         categoryResult[0].id,
         imageUrl || '🎵',
-        audioUrl || null,
+        finalAudioUrl,
         Number(rating) || 5,
-        Boolean(isFeatured),
-        Boolean(isActive),
+        normalizeBoolean(isFeatured, false),
+        normalizeBoolean(isActive, true),
       ]
     );
 
@@ -99,13 +196,14 @@ router.post('/', async (req, res) => {
       action: 'create',
       entityType: 'beat',
       entityId: result[0]?.id ?? null,
-      entityName: result[0]?.name || name,
+      entityName: result[0]?.name || trimmedName,
       details: {
         slug: result[0]?.slug || productSlug,
-        price: Number(result[0]?.price ?? price),
+        price: Number(result[0]?.price ?? parsedPrice),
         categorySlug: categorySlug || 'beats',
-        isActive: Boolean(isActive),
-        isFeatured: Boolean(isFeatured),
+        isActive: normalizeBoolean(isActive, true),
+        isFeatured: normalizeBoolean(isFeatured, false),
+        audioUrl: finalAudioUrl,
       },
       userName: 'admin',
     });
@@ -119,15 +217,16 @@ router.post('/', async (req, res) => {
     console.error('Error al crear producto del admin:', error);
     res.status(500).json({
       success: false,
-      message: 'Error al crear beat',
+      message: error.message || 'Error al crear beat',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', upload.single('audioFile'), async (req, res) => {
   try {
     const { id } = req.params;
+    const body = req.body || {};
     const {
       name,
       slug,
@@ -139,7 +238,15 @@ router.put('/:id', async (req, res) => {
       rating,
       isFeatured,
       isActive,
-    } = req.body;
+    } = body;
+
+    const currentProduct = await query('SELECT * FROM products WHERE id = $1 LIMIT 1', [id]);
+    if (currentProduct.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Beat no encontrado',
+      });
+    }
 
     const categoryResult = await query(
       'SELECT id FROM categories WHERE slug = $1 LIMIT 1',
@@ -152,6 +259,13 @@ router.put('/:id', async (req, res) => {
         message: 'La categoría indicada no existe',
       });
     }
+
+    const uploadedAudioPath = req.file ? `/uploads/${req.file.filename}` : null;
+    const finalAudioUrl = uploadedAudioPath || normalizeAudioUrl(audioUrl) || currentProduct[0].audio_url;
+    const nextPrice = Number(price);
+    const safePrice = Number.isFinite(nextPrice) && nextPrice > 0 ? nextPrice : Number(currentProduct[0].price);
+    const nextIsFeatured = normalizeBoolean(isFeatured, currentProduct[0].is_featured);
+    const nextIsActive = normalizeBoolean(isActive, currentProduct[0].is_active);
 
     const result = await query(
       `UPDATE products
@@ -170,25 +284,22 @@ router.put('/:id', async (req, res) => {
        WHERE id = $11
        RETURNING *`,
       [
-        name,
-        slug || name.toLowerCase().replace(/\s+/g, '-'),
-        description,
-        Number(price),
+        String(name || currentProduct[0].name).trim(),
+        sanitizeSlug(slug || name || currentProduct[0].name),
+        String(description || currentProduct[0].description).trim(),
+        safePrice,
         categoryResult[0].id,
-        imageUrl || '🎵',
-        audioUrl || null,
-        Number(rating) || 5,
-        Boolean(isFeatured),
-        Boolean(isActive),
+        imageUrl || currentProduct[0].image_url || '🎵',
+        finalAudioUrl,
+        Number(rating) || Number(currentProduct[0].rating || 5),
+        nextIsFeatured,
+        nextIsActive,
         id,
       ]
     );
 
-    if (result.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Beat no encontrado',
-      });
+    if (uploadedAudioPath && currentProduct[0].audio_url && currentProduct[0].audio_url.startsWith('/uploads/')) {
+      deleteUploadedAudio(currentProduct[0].audio_url);
     }
 
     await logAdminActivity({
@@ -198,10 +309,11 @@ router.put('/:id', async (req, res) => {
       entityName: result[0]?.name || name,
       details: {
         slug: result[0]?.slug || slug,
-        price: Number(result[0]?.price ?? price),
+        price: Number(result[0]?.price ?? safePrice),
         categorySlug: categorySlug || 'beats',
-        isActive: Boolean(isActive),
-        isFeatured: Boolean(isFeatured),
+        isActive: nextIsActive,
+        isFeatured: nextIsFeatured,
+        audioUrl: finalAudioUrl,
       },
       userName: 'admin',
     });
@@ -215,7 +327,7 @@ router.put('/:id', async (req, res) => {
     console.error('Error al actualizar producto del admin:', error);
     res.status(500).json({
       success: false,
-      message: 'Error al actualizar beat',
+      message: error.message || 'Error al actualizar beat',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
@@ -225,26 +337,30 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await query(
-      'DELETE FROM products WHERE id = $1 RETURNING *',
-      [id]
-    );
+    const currentProduct = await query('SELECT * FROM products WHERE id = $1 LIMIT 1', [id]);
 
-    if (result.length === 0) {
+    if (currentProduct.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Beat no encontrado',
       });
     }
 
+    const result = await query(
+      'DELETE FROM products WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    deleteUploadedAudio(result[0]?.audio_url || currentProduct[0]?.audio_url);
+
     await logAdminActivity({
       action: 'delete',
       entityType: 'beat',
       entityId: Number(id),
-      entityName: result[0]?.name || 'Beat eliminado',
+      entityName: result[0]?.name || currentProduct[0]?.name || 'Beat eliminado',
       details: {
-        slug: result[0]?.slug || null,
-        price: Number(result[0]?.price ?? 0),
+        slug: result[0]?.slug || currentProduct[0]?.slug || null,
+        price: Number(result[0]?.price ?? currentProduct[0]?.price ?? 0),
         deletedAt: new Date().toISOString(),
       },
       userName: 'admin',
